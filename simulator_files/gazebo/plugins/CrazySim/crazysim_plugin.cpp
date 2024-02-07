@@ -34,7 +34,6 @@ void GzCrazyflieInterface::Configure(const Entity &_entity,
   	auto sdfClone = _sdf->Clone();
 
 	/* Get Crazylfie SDF parameters */
-	cflib_latency_ms = sdfClone->Get<int>("cflib_latency_ms");
 	cffirm_addr = sdfClone->Get<std::string>("cffirm_addr");
 	cffirm_port = sdfClone->Get<std::string>("cffirm_port");
 	cflib_addr = sdfClone->Get<std::string>("cflib_addr");
@@ -101,8 +100,8 @@ void GzCrazyflieInterface::Configure(const Entity &_entity,
 	imu_queue = moodycamel::BlockingConcurrentQueue<crtpPacket_t>(20);
 	barometer_queue = moodycamel::BlockingConcurrentQueue<crtpPacket_t>(20);
 	odom_queue = moodycamel::BlockingConcurrentQueue<crtpPacket_t>(20);
-	cflib_to_firmware_queue = moodycamel::BlockingConcurrentQueue<std::pair<std::chrono::steady_clock::duration, crtpPacket_t>>(20);
-	firmware_to_cflib_queue = moodycamel::BlockingConcurrentQueue<std::pair<std::chrono::steady_clock::duration, crtpPacket_t>>(20);
+	cflib_to_firmware_queue = moodycamel::BlockingConcurrentQueue<crtpPacket_t>(20);
+	firmware_to_cflib_queue = moodycamel::BlockingConcurrentQueue<crtpPacket_t>(20);
 
 	addrlen = sizeof(remaddr);
 	addrlen_cfLib = sizeof(remaddr_cfLib);
@@ -125,7 +124,6 @@ void GzCrazyflieInterface::Configure(const Entity &_entity,
 void GzCrazyflieInterface::PostUpdate(const UpdateInfo &_info, const EntityComponentManager &_ecm)
 {
 	writeMotors(); // Should reduce this frequency of motor updates
-	sim_time_ = _info.simTime;
 }
 
 void GzCrazyflieInterface::ImuCallback(const gz::msgs::IMU& imu_msg)
@@ -225,9 +223,7 @@ void GzCrazyflieInterface::recvCfFirmwareThread()
 			crtpPacket_t packet;
 			packet.size = len - 1;
 			memcpy(&packet.raw[0] , &buf[0], sizeof(uint8_t) * len);
-			auto firmware_to_cflib_msg = std::make_pair(sim_time_ + std::chrono::milliseconds(cflib_latency_ms), packet);
-			bool succeeded  = firmware_to_cflib_queue.enqueue(firmware_to_cflib_msg);
-
+			bool succeeded  = firmware_to_cflib_queue.enqueue(packet);
 			if(!succeeded)
 				gzmsg << "Failed to enqueue firmware_to_cflib_queue in recvCfFirmwareThread()." << std::endl;
 		}
@@ -288,27 +284,23 @@ void GzCrazyflieInterface::sendCfFirmwareThread()
 			sendCfFirmware(msgs[i].raw, msgs[i].size+1);
 		}
 
-		if (!cflib_msg_queued){
-			if (cflib_to_firmware_queue.try_dequeue(stamp_msg_pair)){
-				cflib_msg_queued = true;
-			}
-		} else if(cflib_msg_queued && (stamp_msg_pair.first <= sim_time_)) {
-			sendCfFirmware(stamp_msg_pair.second.raw, stamp_msg_pair.second.size+1);
-			cflib_msg_queued = false;
+		size_t cflib_msg_count = cflib_to_firmware_queue.try_dequeue_bulk(msgs, 10);
+		for (size_t i = 0; i != cflib_msg_count; i++) {
+			sendCfFirmware(msgs[i].raw, msgs[i].size+1);
 		}
 	}
 }
 
 void GzCrazyflieInterface::sendCfLibThread()
 {
-	std::pair<std::chrono::steady_clock::duration, crtpPacket_t> stamp_msg_pair;
+	crtpPacket_t msgs[10];
 	while(isPluginOn){
 		if(!socketInit || !socketInit_cfLib)
 			continue;
 
-		if (firmware_to_cflib_queue.try_dequeue(stamp_msg_pair)) {
-			while(stamp_msg_pair.first > sim_time_){}
-			sendCfLib(stamp_msg_pair.second.raw, stamp_msg_pair.second.size+1);
+		size_t cflib_msg_count = firmware_to_cflib_queue.wait_dequeue_bulk(msgs, 10);
+		for (size_t i = 0; i != cflib_msg_count; i++) {
+			sendCfLib(msgs[i].raw, msgs[i].size+1);
 		}
 	}
 } 
@@ -344,11 +336,7 @@ void GzCrazyflieInterface::recvCfLib(uint8_t* data , int len)
 	crtpPacket_t packet;
 	packet.size = len - 1;
 	memcpy(&packet.raw[0] , data , sizeof(uint8_t) * len);
-	
-	auto cflib_to_firmware_msg = std::make_pair(sim_time_ + std::chrono::milliseconds(cflib_latency_ms), packet);
-	bool succeeded  = cflib_to_firmware_queue.enqueue(cflib_to_firmware_msg);
-
-	// bool succeeded  = m_queueSendCfFirm.enqueue(packet);
+	bool succeeded  = cflib_to_firmware_queue.enqueue(packet);
 	if(!succeeded)
 		gzmsg << "Failed recvCfLib" << std::endl;
 }

@@ -165,13 +165,13 @@ namespace gz{
 			moodycamel::BlockingConcurrentQueue<crtpPacket_t> imu_queue;
 			moodycamel::BlockingConcurrentQueue<crtpPacket_t> barometer_queue;
 			moodycamel::BlockingConcurrentQueue<crtpPacket_t> odom_queue;
-			moodycamel::BlockingConcurrentQueue<std::pair<std::chrono::steady_clock::duration, crtpPacket_t>> cflib_to_firmware_queue;
-			moodycamel::BlockingConcurrentQueue<std::pair<std::chrono::steady_clock::duration, crtpPacket_t>> firmware_to_cflib_queue;
+			moodycamel::BlockingConcurrentQueue<crtpPacket_t> cflib_to_firmware_queue;
+			moodycamel::BlockingConcurrentQueue<crtpPacket_t> firmware_to_cflib_queue;
 
 			// std::priority_queue<std::pair<std::chrono::steady_clock::duration, crtpPacket_t>> cflib_to_firmware_queue;
 			// std::priority_queue<std::pair<std::chrono::steady_clock::duration, crtpPacket_t>> firmware_to_cflib_queue;
 
-			std::chrono::steady_clock::duration sim_time_;
+			// std::chrono::steady_clock::duration sim_time_;
 
 			// mutex and messages for motors command
 			gz::msgs::Actuators m_motor_speed;
