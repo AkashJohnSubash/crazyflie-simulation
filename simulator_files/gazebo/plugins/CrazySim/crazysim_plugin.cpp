@@ -246,12 +246,10 @@ void GzCrazyflieInterface::recvCfLibThread()
 			addrlen_cfLib = addrlen_rcv_cfLib;
 			socketInit_cfLib = true;
 			// Send response to CfLib
-			uint8_t data[1] = {0xF3};
-			sendCfLib(data , sizeof(data));
+			// uint8_t data[1] = {0xF3};
+			// sendCfLib(data , sizeof(data));
 		}
 		else if (socketInit_cfLib && buf[0] == 0xF4 && len == 1) {
-			remaddr_cfLib = {0};
-			addrlen_cfLib = {0};
 			socketInit_cfLib = false;
 		}
 		else if (socketInit_cfLib) {
