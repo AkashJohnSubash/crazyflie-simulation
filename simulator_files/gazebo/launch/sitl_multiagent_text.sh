@@ -11,7 +11,15 @@ function spawn_model() {
 	Y=$4 # spawn y position
 	X=${X:=$X}
 	Y=${Y:=$Y}
-
+	SUPPORTED_MODELS=("crazyflie", "crazyflie_thrust_upgrade")
+	if [[ " ${SUPPORTED_MODELS[*]} " != *"$MODEL"* ]];
+	then
+		echo "ERROR: Currently only vehicle model $MODEL is not supported!"
+		echo "       Supported Models: [${SUPPORTED_MODELS[@]}]"
+		trap "cleanup" SIGINT SIGTERM EXIT
+		exit 1
+	fi
+	
 	working_dir="$build_path/$n"
 	[ ! -d "$working_dir" ] && mkdir -p "$working_dir"
 
