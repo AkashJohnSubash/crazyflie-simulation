@@ -20,7 +20,7 @@ function spawn_model() {
 
 	set --
 	set -- ${@} ${src_path}/tools/crazyflie-simulation/simulator_files/gazebo/launch/jinja_gen.py
-	set -- ${@} ${src_path}/tools/crazyflie-simulation/simulator_files/gazebo/models/${MODEL}/${MODEL}.sdf.jinja
+	set -- ${@} ${src_path}/tools/crazyflie-simulation/simulator_files/gazebo/models/${MODEL}/model.sdf.jinja
 	set -- ${@} ${src_path}/tools/crazyflie-simulation/simulator_files/gazebo
 	set -- ${@} --cffirm_udp_port $((19950+${N}))
 	set -- ${@} --cflib_udp_port $((19850+${N}))
