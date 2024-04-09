@@ -50,21 +50,18 @@ function spawn_model() {
 
 if [ "$1" == "-h" ] || [ "$1" == "--help" ]
 then
-	echo "Usage: $0 [-n <num_vehicles>] [-m <vehicle_model>] [-w <world>] [-s <script>]"
-	echo "-s flag is used to script spawning vehicles e.g. $0 -s crazyflie:3"
+	echo "Description: This script is used to spawn multiple vehicles in gazebo in a square formation."
+	echo "Usage: $0 [-n <num_vehicles>] [-m <vehicle_model>] [-w <world>]"
 	exit 1
 fi
 
-while getopts n:m:w:s:t:l: option
+while getopts n:m:w: option
 do
 	case "${option}"
 	in
 		n) NUM_VEHICLES=${OPTARG};;
 		m) VEHICLE_MODEL=${OPTARG};;
 		w) WORLD=${OPTARG};;
-		s) SCRIPT=${OPTARG};;
-		t) TARGET=${OPTARG};;
-		l) LABEL=_${OPTARG};;
 	esac
 done
 
@@ -74,7 +71,6 @@ target=${TARGET:=cf2}
 vehicle_model=${VEHICLE_MODEL:="crazyflie"}
 export CF2_SIM_MODEL=gz_${vehicle_model}
 
-echo ${SCRIPT}
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 src_path="$SCRIPT_DIR/../../../../.."
 
@@ -88,49 +84,23 @@ sleep 1
 source ${src_path}/tools/crazyflie-simulation/simulator_files/gazebo/launch/setup_gz.bash ${src_path} ${build_path}
 
 echo "Starting gazebo"
-gz sim -s -r ${src_path}/tools/crazyflie-simulation/simulator_files/gazebo/worlds/${world}.sdf -v 3 &
+gz sim -s -r ${src_path}/tools/crazyflie-simulation/simulator_files/gazebo/worlds/${world}.sdf -v 0 &
 sleep 3
 
-n=0
-if [ -z ${SCRIPT} ]; then
-	if [ $num_vehicles -gt 255 ]
-	then
-		echo "Tried spawning $num_vehicles vehicles. The maximum number of supported vehicles is 255"
-		exit 1
-	fi
-
-	while [ $n -lt $num_vehicles ]; do
-		denom=$(python -c "from math import ceil, sqrt; print(ceil(sqrt($num_vehicles)))")
-		x_cord=$(($n%$denom))
-		y_cord=$(($n/$denom - ($n%$denom)/$denom))
-		spawn_model ${vehicle_model} $(($n)) $x_cord $y_cord
-		n=$(($n + 1))
-	done
-else
-	IFS=,
-	for target in ${SCRIPT}; do
-		target="$(echo "$target" | tr -d ' ')" #Remove spaces
-		target_vehicle=$(echo $target | cut -f1 -d:)
-		target_number=$(echo $target | cut -f2 -d:)
-		target_x=$(echo $target | cut -f3 -d:)
-		target_y=$(echo $target | cut -f4 -d:)
-
-		if [ $n -gt 255 ]
-		then
-			echo "Tried spawning $n vehicles. The maximum number of supported vehicles is 255"
-			exit 1
-		fi
-
-		m=0
-		while [ $m -lt ${target_number} ]; do
-			export CF2_SIM_MODEL=gz_${target_vehicle}
-			spawn_model ${target_vehicle}${LABEL} $(($n)) $target_x $target_y
-			m=$(($m + 1))
-			n=$(($n + 1))
-		done
-	done
-
+if [ $num_vehicles -gt 255 ]
+then
+	echo "Tried spawning $num_vehicles vehicles. The maximum number of supported vehicles is 255"
+	exit 1
 fi
+n=0
+while [ $n -lt $num_vehicles ]; do
+	denom=$(python -c "from math import ceil, sqrt; print(ceil(sqrt($num_vehicles)))")
+	x_cord=$(($n%$denom))
+	y_cord=$(($n/$denom - ($n%$denom)/$denom))
+	spawn_model ${vehicle_model} $(($n)) $x_cord $y_cord
+	n=$(($n + 1))
+done
+
 trap "cleanup" SIGINT SIGTERM EXIT
 
 echo "Starting gazebo gui"

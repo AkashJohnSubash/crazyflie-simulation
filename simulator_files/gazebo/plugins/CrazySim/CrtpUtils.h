@@ -6,9 +6,10 @@
 #include "crtp.h"
 
 #define CRTP_PORT_SETPOINT_SIM 0x09
-#define CRTP_LOCALIZATION 0x06
+#define CRTP_PORT_LOCALIZATION 0x06
 #define CRTP_LOC_CHANNEL_EXT_POS 0x00
-#define CRTP_LOC_CHANNEL_GEN_LOC 0x00
+#define CRTP_LOC_CHANNEL_GEN_LOC 0x01
+#define CRTP_GEN_LOC_ID_EXT_POS 0x08
 
 // Conversion coefficient for Crazyflie
 #define MAG_GAUSS_PER_LSB                                 666.7
@@ -35,6 +36,7 @@ enum SensorTypeSim_e {
 struct CrtpExtPose_s
 {
   const crtp header;
+  uint8_t id;
   float x; // in m
   float y; // in m
   float z; // in m

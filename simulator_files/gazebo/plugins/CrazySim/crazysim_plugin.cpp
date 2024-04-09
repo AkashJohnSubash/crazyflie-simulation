@@ -168,7 +168,8 @@ void GzCrazyflieInterface::OdomCallback(const gz::msgs::Odometry& odom_msg)
 {
 	// Just need to transfer to the fcu the external position
 	struct CrtpExtPose_s ext_pose  = {
-		.header = crtp(CRTP_LOCALIZATION, CRTP_LOC_CHANNEL_GEN_LOC),
+		.header = crtp(CRTP_PORT_LOCALIZATION, CRTP_LOC_CHANNEL_GEN_LOC),
+		.id = CRTP_GEN_LOC_ID_EXT_POS,
 		.x = static_cast<float>(odom_msg.pose().position().x()),
 		.y = static_cast<float>(odom_msg.pose().position().y()), 
 		.z = static_cast<float>(odom_msg.pose().position().z()),

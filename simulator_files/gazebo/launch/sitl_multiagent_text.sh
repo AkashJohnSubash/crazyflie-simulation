@@ -50,29 +50,26 @@ function spawn_model() {
 
 if [ "$1" == "-h" ] || [ "$1" == "--help" ]
 then
-	echo "Usage: $0 [-n <num_vehicles>] [-m <vehicle_model>] [-w <world>] [-s <script>]"
-	echo "-s flag is used to script spawning vehicles e.g. $0 -s crazyflie:3"
+	echo "Description: This script is used to spawn multiple vehicles in gazebo from a coordinates list text file."
+	echo "Usage: $0 [-m <vehicle_model>] [-w <world>] [-f <file_name>]"
 	exit 1
 fi
 
-while getopts n:m:w:s:t:l: option
+while getopts m:w:f: option
 do
 	case "${option}"
 	in
 		m) VEHICLE_MODEL=${OPTARG};;
 		w) WORLD=${OPTARG};;
-		s) SCRIPT=${OPTARG};;
-		t) TARGET=${OPTARG};;
-		l) LABEL=_${OPTARG};;
+		f) COORDINATES_FILE=${OPTARG};;
 	esac
 done
 
 world=${WORLD:=crazysim_default}
-target=${TARGET:=cf2}
 vehicle_model=${VEHICLE_MODEL:="crazyflie"}
+coordinates_file=${COORDINATES_FILE:="single_origin.txt"}
 export CF2_SIM_MODEL=gz_${vehicle_model}
 
-echo ${SCRIPT}
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 src_path="$SCRIPT_DIR/../../../../.."
 
@@ -90,39 +87,12 @@ gz sim -s -r ${src_path}/tools/crazyflie-simulation/simulator_files/gazebo/world
 sleep 3
 
 n=0
-if [ -z ${SCRIPT} ]; then
+while IFS= read -r line || [ -n "$line" ];do
+	fields=($(printf "%s" "$line"|cut -d',' --output-delimiter=' ' -f1-))
+	spawn_model ${vehicle_model} $(($n)) ${fields[0]} ${fields[1]}
+	n=$(($n + 1))
+done < "$SCRIPT_DIR/drone_spawn_list/${coordinates_file}"
 
-	while IFS= read -r line || [ -n "$line" ];do
-		fields=($(printf "%s" "$line"|cut -d',' --output-delimiter=' ' -f1-))
-		spawn_model ${vehicle_model} $(($n)) ${fields[0]} ${fields[1]}
-		n=$(($n + 1))
-	done < "$SCRIPT_DIR/agents.txt"
-
-else
-	IFS=,
-	for target in ${SCRIPT}; do
-		target="$(echo "$target" | tr -d ' ')" #Remove spaces
-		target_vehicle=$(echo $target | cut -f1 -d:)
-		target_number=$(echo $target | cut -f2 -d:)
-		target_x=$(echo $target | cut -f3 -d:)
-		target_y=$(echo $target | cut -f4 -d:)
-
-		if [ $n -gt 255 ]
-		then
-			echo "Tried spawning $n vehicles. The maximum number of supported vehicles is 255"
-			exit 1
-		fi
-
-		m=0
-		while [ $m -lt ${target_number} ]; do
-			export CF2_SIM_MODEL=gz_${target_vehicle}
-			spawn_model ${target_vehicle}${LABEL} $(($n)) $target_x $target_y
-			m=$(($m + 1))
-			n=$(($n + 1))
-		done
-	done
-
-fi
 trap "cleanup" SIGINT SIGTERM EXIT
 
 echo "Starting gazebo gui"
