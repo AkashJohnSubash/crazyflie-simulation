@@ -5,12 +5,26 @@
 #include "crazysim_plugin.h"
 #include <future>
 
-using namespace gz;
-using namespace sim;
-using namespace systems;
+#include <gz/plugin/Register.hh>
+GZ_ADD_PLUGIN(crazyflie_interface::GzCrazyflieInterface,
+			  gz::sim::System,
+			  crazyflie_interface::GzCrazyflieInterface::ISystemConfigure,
+			  crazyflie_interface::GzCrazyflieInterface::ISystemPreUpdate,
+			  crazyflie_interface::GzCrazyflieInterface::ISystemPostUpdate)
+using namespace crazyflie_interface;
 
-GzCrazyflieInterface::~GzCrazyflieInterface()
-{
+GzCrazyflieInterface::GzCrazyflieInterface() :
+	namespace_(kDefaultNamespace),
+	motor_velocity_reference_pub_topic_(kDefaultMotorVelocityReferencePubTopic),
+	imu_sub_topic_(kDefaultImuTopic),
+	magnetic_field_sub_topic_(kDefaultMagneticFieldTopic),
+	barometer_sub_topic_(kDefaultFluidPressureTopic),
+	odom_sub_topic_(kDefaultOdomTopic),
+	cf_prefix(kDefaultCfPrefix),
+	isPluginOn(true){
+}
+
+GzCrazyflieInterface::~GzCrazyflieInterface() {
 	isPluginOn = false;
 	socketInit_cfLib = false;
 	socketInit = false;
@@ -22,15 +36,12 @@ GzCrazyflieInterface::~GzCrazyflieInterface()
 	receiverCfLibThread.join();
 }
 
-void GzCrazyflieInterface::Configure(const Entity &_entity,
+void GzCrazyflieInterface::Configure(const gz::sim::Entity &_entity,
 						const std::shared_ptr<const sdf::Element> &_sdf,
-						EntityComponentManager &_ecm,
-						EventManager &_eventMgr)
-{
+						gz::sim::EntityComponentManager &_ecm,
+						gz::sim::EventManager &_eventMgr) {
 	gzdbg << __FUNCTION__ << "() called." << std::endl;
-	
-	model_ = Model(_entity);
-	
+		
   	auto sdfClone = _sdf->Clone();
 
 	/* Get Crazylfie SDF parameters */
@@ -117,17 +128,18 @@ void GzCrazyflieInterface::Configure(const Entity &_entity,
 	receiverCfLibThread = std::thread(&GzCrazyflieInterface::recvCfLibThread, this);
 	senderCfFirmwareThread = std::thread(&GzCrazyflieInterface::sendCfFirmwareThread, this);
 	senderCfLibThread = std::thread(&GzCrazyflieInterface::sendCfLibThread, this);
-	gzdbg << "Receiver, sender task created for Handler : " << model_.Name(_ecm) << std::endl;
 	initializeSubsAndPub();
 }
 
-void GzCrazyflieInterface::PostUpdate(const UpdateInfo &_info, const EntityComponentManager &_ecm)
-{
-	writeMotors(); // Should reduce this frequency of motor updates
+void GzCrazyflieInterface::PreUpdate(const gz::sim::UpdateInfo &_info, gz::sim::EntityComponentManager &_ecm) {
+	writeMotors();
 }
 
-void GzCrazyflieInterface::ImuCallback(const gz::msgs::IMU& imu_msg)
-{
+void GzCrazyflieInterface::PostUpdate(const gz::sim::UpdateInfo &_info, const gz::sim::EntityComponentManager &_ecm) {
+
+}
+
+void GzCrazyflieInterface::ImuCallback(const gz::msgs::IMU& imu_msg) {
 	struct imu_s m_imu_info = {
 		.header = crtp(CRTP_PORT_SETPOINT_SIM, 0),
 		.type = SENSOR_GYRO_ACC_SIM,
@@ -144,8 +156,7 @@ void GzCrazyflieInterface::ImuCallback(const gz::msgs::IMU& imu_msg)
 	imu_queue.enqueue(msg);
 }
 
-void GzCrazyflieInterface::BarometerCallback(const gz::msgs::FluidPressure& air_pressure_msg)
-{
+void GzCrazyflieInterface::BarometerCallback(const gz::msgs::FluidPressure& air_pressure_msg) {
 	double temperature_at_altitude_kelvin = kSeaLevelTempKelvin * exp(- log(air_pressure_msg.pressure() / kPressureOneAtmospherePascals)/kAirConstantDimensionless);
 	double height_geopotential_m = (kSeaLevelTempKelvin - temperature_at_altitude_kelvin)/kTempLapseKelvinPerMeter;
 	double height_geometric_m = height_geopotential_m * kEarthRadiusMeters / (kEarthRadiusMeters - height_geopotential_m);
@@ -164,8 +175,7 @@ void GzCrazyflieInterface::BarometerCallback(const gz::msgs::FluidPressure& air_
 	barometer_queue.enqueue(msg);
 }
 
-void GzCrazyflieInterface::OdomCallback(const gz::msgs::Odometry& odom_msg)
-{
+void GzCrazyflieInterface::OdomCallback(const gz::msgs::Odometry& odom_msg) {
 	// Just need to transfer to the fcu the external position
 	struct CrtpExtPose_s ext_pose  = {
 		.header = crtp(CRTP_PORT_LOCALIZATION, CRTP_LOC_CHANNEL_GEN_LOC),
@@ -185,24 +195,21 @@ void GzCrazyflieInterface::OdomCallback(const gz::msgs::Odometry& odom_msg)
 	odom_queue.enqueue(msg);
 }
 
-bool GzCrazyflieInterface::sendCfFirmware(const uint8_t* data , uint32_t length)
-{	
+bool GzCrazyflieInterface::sendCfFirmware(const uint8_t* data , uint32_t length) {	
 	int transferred = sendto(fd, data, length, 0, (struct sockaddr *) &(remaddr), addrlen);
 	if (transferred <= 0)
 		throw std::runtime_error(strerror(errno));
     return true;
 }
 
-bool GzCrazyflieInterface::sendCfLib(const uint8_t* data , uint32_t length)
-{	
+bool GzCrazyflieInterface::sendCfLib(const uint8_t* data , uint32_t length) {	
 	int transferred = sendto(fd_cfLib, data, length, 0, (struct sockaddr *) &(remaddr_cfLib), addrlen_cfLib);
 	if (transferred <= 0)
 		throw std::runtime_error(strerror(errno));
     return true;
 }
 
-void GzCrazyflieInterface::recvCfFirmwareThread()
-{
+void GzCrazyflieInterface::recvCfFirmwareThread() {
 	uint8_t buf[32];
 	while(isPluginOn)
 	{
@@ -231,8 +238,7 @@ void GzCrazyflieInterface::recvCfFirmwareThread()
 	}
 }
 
-void GzCrazyflieInterface::recvCfLibThread()
-{
+void GzCrazyflieInterface::recvCfLibThread() {
 	uint8_t buf[32];
 	while(isPluginOn)
 	{
@@ -259,11 +265,9 @@ void GzCrazyflieInterface::recvCfLibThread()
 	}
 }
 
-void GzCrazyflieInterface::sendCfFirmwareThread()
-{
+void GzCrazyflieInterface::sendCfFirmwareThread() {
 	crtpPacket_t msgs[10];
 	std::pair<std::chrono::steady_clock::duration, crtpPacket_t> stamp_msg_pair;
-	bool cflib_msg_queued{false};
 	while(isPluginOn){
 		if(!socketInit)
 			continue;
@@ -290,8 +294,7 @@ void GzCrazyflieInterface::sendCfFirmwareThread()
 	}
 }
 
-void GzCrazyflieInterface::sendCfLibThread()
-{
+void GzCrazyflieInterface::sendCfLibThread() {
 	crtpPacket_t msgs[10];
 	while(isPluginOn){
 		if(!socketInit || !socketInit_cfLib)
@@ -305,8 +308,7 @@ void GzCrazyflieInterface::sendCfLibThread()
 } 
 
 
-void GzCrazyflieInterface::initializeSubsAndPub()
-{
+void GzCrazyflieInterface::initializeSubsAndPub() {
 	node_.Subscribe(cf_prefix + "_" + std::to_string(cf_id_) + imu_sub_topic_, &GzCrazyflieInterface::ImuCallback , this);
 	node_.Subscribe(cf_prefix + "_" + std::to_string(cf_id_) + barometer_sub_topic_, &GzCrazyflieInterface::BarometerCallback, this );
 	node_.Subscribe(cf_prefix + "_" + std::to_string(cf_id_) + odom_sub_topic_, &GzCrazyflieInterface::OdomCallback, this );
@@ -317,8 +319,7 @@ void GzCrazyflieInterface::initializeSubsAndPub()
 	gzmsg << "Init subs and Pubs done : " << std::endl;
 }
 
-void GzCrazyflieInterface::handleMotorsMessage(const uint8_t* data)
-{
+void GzCrazyflieInterface::handleMotorsMessage(const uint8_t* data) {
 	crtpMotorsDataResponse* motorsData = (crtpMotorsDataResponse *) data;
 	{
 		std::unique_lock<std::mutex> mlock(motors_mutex);
@@ -330,8 +331,7 @@ void GzCrazyflieInterface::handleMotorsMessage(const uint8_t* data)
 
 }
 
-void GzCrazyflieInterface::recvCfLib(uint8_t* data , int len)
-{
+void GzCrazyflieInterface::recvCfLib(uint8_t* data , int len) {
 	crtpPacket_t packet;
 	packet.size = len - 1;
 	memcpy(&packet.raw[0] , data , sizeof(uint8_t) * len);
@@ -341,8 +341,7 @@ void GzCrazyflieInterface::recvCfLib(uint8_t* data , int len)
 }
 
 
-void GzCrazyflieInterface::writeMotors()
-{
+void GzCrazyflieInterface::writeMotors() {
 	m_motor_speed.clear_velocity();
 	motors_mutex.lock();
 	m_motor_speed.add_velocity(m_motor_command_.m1); // 0
@@ -352,9 +351,3 @@ void GzCrazyflieInterface::writeMotors()
 	motors_mutex.unlock();
 	motor_velocity_reference_pub_.Publish(m_motor_speed);
 }
-
-GZ_ADD_PLUGIN(GzCrazyflieInterface,
-			  gz::sim::System,
-			  gz::sim::ISystemConfigure,
-			  gz::sim::ISystemPostUpdate)
-GZ_ADD_PLUGIN_ALIAS(GzCrazyflieInterface, "gz::sim::systems::GzCrazyflieInterface")

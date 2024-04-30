@@ -1,5 +1,5 @@
 #!/bin/bash
-#
+
 # Setup environment to make Crazysim visible to Gazebo.
 # Derived from PX4 setup_gazebo.sh file
 

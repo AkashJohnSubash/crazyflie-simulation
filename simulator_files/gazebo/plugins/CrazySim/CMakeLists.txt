@@ -1,100 +1,56 @@
-cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
-cmake_policy(SET CMP0042 NEW)
-cmake_policy(SET CMP0048 NEW)
-cmake_policy(SET CMP0054 NEW)
+cmake_minimum_required(VERSION 3.11.0 FATAL_ERROR)
 
-if (NOT CMAKE_INSTALL_PREFIX)
-  set(CMAKE_INSTALL_PREFIX "/usr" CACHE STRING "install prefix" FORCE)
-endif()
+# find_package(gz-cmake3 REQUIRED)
 
-message(STATUS "install-prefix: ${CMAKE_INSTALL_PREFIX}")
+project(crazysim_gz VERSION 1.1.0)
 
-project(crazysim_gz VERSION 1.0.0)
-include(GNUInstallDirs)
+find_package(gz-plugin REQUIRED COMPONENTS register NAMES gz-plugin2)
+set(GZ_PLUGIN_VER ${gz-plugin_VERSION_MAJOR})
 
-find_package(Boost REQUIRED COMPONENTS system thread timer)
-find_package(PkgConfig REQUIRED)
-find_package(OpenCV REQUIRED)
-pkg_check_modules(OGRE OGRE)
-find_package(gz-sim7 REQUIRED)
-find_package(gz-transport12 REQUIRED OPTIONAL_COMPONENTS log)
-find_package(gz-msgs9 REQUIRED)
-
-set_source_files_properties(${PROTO_SRC} ${PROTO_HEADER}
-                           PROPERTIES GENERATED TRUE)
-
-find_package(Eigen3 QUIET)
-if(NOT EIGEN3_FOUND)
-  find_package(Eigen QUIET)
-  if(NOT EIGEN_FOUND)
-    pkg_check_modules(EIGEN3 REQUIRED eigen3)
-  else()
-    set(EIGEN3_INCLUDE_DIRS ${EIGEN_INCLUDE_DIRS})
-    set(EIGEN3_LIBRARIES ${EIGEN_LIBRARIES})
+set(GZ_SIM_FOUND FALSE)
+foreach(ver 8 7) # replace with future gz-sim versions
+  if(NOT GZ_SIM_FOUND)
+    find_package(gz-sim NAMES gz-sim${ver})
+    if(gz-sim_FOUND)
+      set(GZ_SIM_VER ${gz-sim_VERSION_MAJOR})
+      set(GZ_SIM_FOUND TRUE)
+    endif()
   endif()
-else()
-  set(EIGEN3_INCLUDE_DIRS ${EIGEN3_INCLUDE_DIR})
+endforeach()
+
+if(NOT GZ_SIM_FOUND)
+  message(FATAL_ERROR "gz-sim not found")
 endif()
 
-find_package(Boost 1.40 COMPONENTS system thread timer REQUIRED )
+if(GZ_SIM_VER EQUAL 8)
+  message("Found Gazebo 8: Harmonic")
+  find_package(gz-transport REQUIRED NAMES gz-transport13)
+  find_package(gz-msgs REQUIRED NAMES gz-msgs10)
+elseif(GZ_SIM_VER EQUAL 7)
+  message("Found Gazebo 7: Garden")
+  find_package(gz-transport REQUIRED NAMES gz-transport12)
+  find_package(gz-msgs REQUIRED NAMES gz-msgs9)
+endif()
 
-include_directories(
-  ${GZ-SIM_INCLUDE_DIRS}
-  ${GZ-MSGS_INCLUDE_DIRS}
-  ${GZ-TRANSPORT_INCLUDE_DIRS}
-  ${EIGEN3_INCLUDE_DIRS}
-  ${OpenCV_INCLUDE_DIRS}
-  ${CMAKE_BINARY_DIR}
-  ${CMAKE_CURRENT_BINARY_DIR}
-  ${Boost_INCLUDE_DIR}
-  ${Boost_INCLUDE_DIR}/eigen3
-  ${EIGEN3_INCLUDE_DIRS}/eigen3
-  ${OGRE_INCLUDE_DIRS}
-  ${OGRE_INCLUDE_DIRS}/Paging
-  /usr/local/include/OGRE
-  /usr/local/include/OGRE/Paging
-)
+set(GZ_TRANSPORT_VER ${gz-transport_VERSION_MAJOR})
+set(GZ_MSGS_VER ${gz-msgs_VERSION_MAJOR})
 
+find_package(PkgConfig REQUIRED)
 
-link_libraries(
-  ${GZ-SIM_LIBRARIES}
-  ${GZ-MSGS_LIBRARIES}
-  ${OpenCV_LIBRARIES}
-  ${Boost_SYSTEM_LIBRARY_RELEASE}
-  ${Boost_THREAD_LIBRARY_RELEASE}
-  ${Boost_TIMER_LIBRARY_RELEASE}
-)
-
-
-link_directories(
-    ${GZ-SIM_LIBRARY_DIRS}
-    ${CMAKE_CURRENT_BINARY_DIR}
-    ${OGRE_LIBRARY_DIRS}
-)
-
-#======================================= gz_CrazyflieInterface PLUGIN ==========================================//
+#======================================= CrazySim PLUGIN ==========================================//
 add_library(gz_crazysim_plugin SHARED crazysim_plugin.cpp)
-set_property(TARGET gz_crazysim_plugin PROPERTY ENABLE_EXPORTS ON)
+set_property(TARGET gz_crazysim_plugin PROPERTY CXX_STANDARD 17)
 target_link_libraries(gz_crazysim_plugin 
-  # ${CRAZYFLIE_COMM_LIBRARY} 
-  ${GZ-SIM_LIBRARIES} 
-  ${GZ-TRANSPORT_LIBRARIES} 
-  ${GZ-MSGS_LIBRARIES}
+  PRIVATE
+    gz-plugin${GZ_PLUGIN_VER}::gz-plugin${GZ_PLUGIN_VER}
+    gz-sim${GZ_SIM_VER}::gz-sim${GZ_SIM_VER}
+    gz-msgs${GZ_MSGS_VER}::gz-msgs${GZ_MSGS_VER}
+    gz-transport${GZ_TRANSPORT_VER}::core
 )
-
-list(APPEND targets_to_install gz_crazysim_plugin)
 #==============================================================================================//
 
-set(PLUGIN_PATH ${CMAKE_INSTALL_LIBDIR}/${PROJECT_NAME}/plugins)
-set(MODEL_PATH ${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME}/models)
-set(RESOURCE_PATH ${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME})
-
-file(REMOVE_RECURSE ${PROJECT_SOURCE_DIR}/models/.DS_Store)
-file(GLOB models_list LIST_DIRECTORIES true ${PROJECT_SOURCE_DIR}/models/*)
-
-file(REMOVE_RECURSE ${PROJECT_SOURCE_DIR}/worlds/.DS_Store)
-file(GLOB worlds_list LIST_DIRECTORIES true ${PROJECT_SOURCE_DIR}/worlds/*)
-
-install(TARGETS ${plugins} DESTINATION ${PLUGIN_PATH})
-install(DIRECTORY ${models_list} DESTINATION ${MODEL_PATH})
-install(FILES ${worlds_list} DESTINATION ${RESOURCE_PATH}/worlds)
+include(GNUInstallDirs)
+install(TARGETS
+  gz_crazysim_plugin
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
