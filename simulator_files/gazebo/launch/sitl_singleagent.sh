@@ -84,7 +84,7 @@ sleep 1
 source ${src_path}/tools/crazyflie-simulation/simulator_files/gazebo/launch/setup_gz.bash ${src_path} ${build_path}
 
 echo "Starting gazebo"
-gz sim -s -r ${src_path}/tools/crazyflie-simulation/simulator_files/gazebo/worlds/${world}.sdf -v 3 &
+gz sim -s --render-engine ogre -r ${src_path}/tools/crazyflie-simulation/simulator_files/gazebo/worlds/${world}.sdf -v 3 &
 sleep 3
 
 n=0
@@ -94,4 +94,4 @@ trap "cleanup" SIGINT SIGTERM EXIT
 
 echo "Starting gazebo gui"
 #gdb ruby
-gz sim -g
+gz sim -g --render-engine ogre
