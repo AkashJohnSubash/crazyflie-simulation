@@ -18,8 +18,8 @@ sort_order: 3
 *Note that indeed this is still IGN_GAZEBO_RESOURCE_PATH, eventhough gazebo dropped the name IGN so this should be updated at one point*
 
 4- Try out the crazyflie world with: 
-    gz sim crazyflie_world.sdf
+    gz sim crazyflie_world.sdf --render-engine ogre
 
 5- Spin motors 
 
-    gz topic -t /crazyflie/gazebo/command/motor_speed --msgtype ignition.msgs.Actuators -p 'velocity:[250,250,250,250]'
+    gz topic -t /crazyflie/gazebo/command/motor_speed --msgtype gz.msgs.Actuators -p 'velocity:[250,250,250,250]'
